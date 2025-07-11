@@ -1,0 +1,30 @@
+# dotensure
+
+Pipe the results of `go test` or `encore test` through this tool to check whether [dotsql](https://github.com/qustavo/dotsql)
+queries are being executed by the unit tests.
+
+You must specify -json as one of the arguments to the test program, so that it outputs JSON that this tool can read
+(you may send it whatever other arguments you like).
+
+## Usage
+`encore test -json ./... | dotensure`
+
+You will also need to add log lines in your tests printing a line of the form
+
+`ExpectedQuery: query-name\n`
+
+Each time a query is loaded (dotsql includes a convenient `QueryMap` function which suits this)
+
+And also
+
+`ExecutedQuery: query-name\n`
+
+When it is run. Or just first run, that's sufficient. I suggest a wrapper around your `*dotsql.DotSql` instance inside
+the unit tests.
+
+## Installation
+`go install github.com/kayrein/dotensure`
+
+## Arguments
+
+Pass `-v` to dotensure to print the version.
