@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -34,21 +36,13 @@ type JsonLogItem struct {
 	Elapsed *float64
 }
 
-var notedQuery = regexp.MustCompile(`(Expected|Executed)Query:\s+(.+)`)
+var notedQuery = regexp.MustCompile(`(Expected|Executed)Query:\s+([^;]+)(?:;\s+(.+))?`)
 
-func main() {
-	printVersion := flag.Bool("v", false, "print the version and exit")
-	flag.Parse()
+func parser(r io.Reader, w io.Writer) (int, int, error) {
+	input := bufio.NewScanner(r)
 
-	if *printVersion {
-		fmt.Printf("dotensure %s\n", version)
-		return
-	}
-
-	input := bufio.NewScanner(os.Stdin)
-
-	expectedQueries := make(map[string]struct{})
-	executedQueries := make(map[string]struct{})
+	expectedQueries := make(map[string]string)
+	executedQueries := make(map[string]string)
 
 	for {
 		cont := input.Scan()
@@ -64,25 +58,88 @@ func main() {
 			groups := notedQuery.FindStringSubmatch(strings.TrimSuffix(data.Output, "\\n"))
 			if len(groups) == 0 {
 				continue
+			} else if len(groups) == 3 {
+				groups = append(groups, "")
 			}
 			if groups[1] == "Expected" {
-				expectedQueries[groups[2]] = struct{}{}
+				if _, ok := expectedQueries[groups[2]]; !ok {
+					expectedQueries[groups[2]] = groups[3]
+				}
 			} else if groups[1] == "Executed" {
-				executedQueries[groups[2]] = struct{}{}
+				if _, ok := executedQueries[groups[2]]; !ok {
+					executedQueries[groups[2]] = groups[3]
+				}
 			}
 		}
 	}
 
 	found := 0
-	for expected, _ := range expectedQueries {
+	tagCounts := make(map[string]int)
+	output := make([]string, 0)
+	for expected, tag := range expectedQueries {
 		if _, ok := executedQueries[expected]; !ok {
-			fmt.Printf("Expected query not executed: %s\n", expected)
+			tagSuffix := ""
+			if tag != "" {
+				tagSuffix = "."
+			}
+			tagCounts[tag]++
+			output = append(output, fmt.Sprintf("Expected query not executed: %s%s%s", tag, tagSuffix, expected))
 		} else {
 			found++
 		}
 	}
-	fmt.Printf("Found %d / %d expected queries\n", found, len(expectedQueries))
-	if found < len(expectedQueries) {
+
+	slices.Sort(output)
+	for _, line := range output {
+		_, err := fmt.Fprintln(w, line)
+		if err != nil {
+			return found, len(expectedQueries), err
+		}
+	}
+	if len(output) > 0 {
+		_, err := fmt.Fprintln(w)
+		if err != nil {
+			return found, len(expectedQueries), err
+		}
+	}
+
+	if len(tagCounts) > 1 {
+		output = make([]string, 0)
+		for tag, count := range tagCounts {
+			output = append(output, fmt.Sprintf("%s: %d", tag, count))
+		}
+		slices.Sort(output)
+		for _, line := range output {
+			_, err := fmt.Fprintln(w, line)
+			if err != nil {
+				return found, len(expectedQueries), err
+			}
+		}
+		_, err := fmt.Fprintln(w)
+		if err != nil {
+			return found, len(expectedQueries), err
+		}
+	}
+
+	return found, len(expectedQueries), nil
+}
+
+func main() {
+	log.SetFlags(0)
+	printVersion := flag.Bool("v", false, "print the version and exit")
+	flag.Parse()
+
+	if *printVersion {
+		fmt.Printf("dotensure %s\n", version)
+		return
+	}
+
+	found, expected, err := parser(os.Stdin, os.Stdout)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Found %d / %d expected queries\n", found, expected)
+	if found < expected {
 		os.Exit(1)
 	}
 }

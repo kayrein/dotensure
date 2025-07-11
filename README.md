@@ -22,6 +22,20 @@ And also
 When it is run. Or just first run, that's sufficient. I suggest a wrapper around your `*dotsql.DotSql` instance inside
 the unit tests.
 
+## Tags
+
+Optionally, you can include a tag at the end of each query:
+`ExpectedQuery: query-name; tag\n`
+
+This tag is not used in matching executing and expected queries but does display during output. 
+
+If multiple ExpectedQueries have the same name but different tags, behaviour is undefined (at the moment it will take
+the first one, but I suggest not relying on this).
+
+It will also count the number of missing queries for each tag value.
+
+Tags are also syntactically accepted for ExecutedQueries but currently do not do anything.
+
 ## Installation
 `go install github.com/kayrein/dotensure`
 
