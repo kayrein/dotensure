@@ -38,7 +38,7 @@ type JsonLogItem struct {
 
 var notedQuery = regexp.MustCompile(`(Expected|Executed)Query:\s+([^;]+)(?:;\s+(.+))?`)
 
-func parser(r io.Reader, w io.Writer) (int, int, error) {
+func parser(verbose bool, r io.Reader, w io.Writer) (int, int, error) {
 	input := bufio.NewScanner(r)
 
 	expectedQueries := make(map[string]string)
@@ -55,7 +55,9 @@ func parser(r io.Reader, w io.Writer) (int, int, error) {
 			log.Fatalf("Make sure you run tests with -json (%v)", err)
 		}
 		if data.Action == Output {
-			groups := notedQuery.FindStringSubmatch(strings.TrimSuffix(data.Output, "\\n"))
+			data.Output = strings.TrimSuffix(data.Output, "\\n")
+			data.Output = strings.TrimSpace(data.Output)
+			groups := notedQuery.FindStringSubmatch(data.Output)
 			if len(groups) == 0 {
 				continue
 			} else if len(groups) == 3 {
@@ -67,7 +69,9 @@ func parser(r io.Reader, w io.Writer) (int, int, error) {
 				}
 			} else if groups[1] == "Executed" {
 				if _, ok := executedQueries[groups[2]]; !ok {
-					executedQueries[groups[2]] = groups[3]
+					executedQueries[groups[2]] = data.Test
+				} else {
+					executedQueries[groups[2]] = strings.Join([]string{executedQueries[groups[2]], data.Test}, ", ")
 				}
 			}
 		}
@@ -77,7 +81,7 @@ func parser(r io.Reader, w io.Writer) (int, int, error) {
 	tagCounts := make(map[string]int)
 	output := make([]string, 0)
 	for expected, tag := range expectedQueries {
-		if _, ok := executedQueries[expected]; !ok {
+		if tests, ok := executedQueries[expected]; !ok {
 			tagSuffix := ""
 			if tag != "" {
 				tagSuffix = "."
@@ -85,6 +89,9 @@ func parser(r io.Reader, w io.Writer) (int, int, error) {
 			tagCounts[tag]++
 			output = append(output, fmt.Sprintf("Expected query not executed: %s%s%s", tag, tagSuffix, expected))
 		} else {
+			if verbose {
+				output = append(output, fmt.Sprintf("Executed query: %s by %s", expected, tests))
+			}
 			found++
 		}
 	}
@@ -126,7 +133,8 @@ func parser(r io.Reader, w io.Writer) (int, int, error) {
 
 func main() {
 	log.SetFlags(0)
-	printVersion := flag.Bool("v", false, "print the version and exit")
+	verbose := flag.Bool("verbose", false, "Verbose output")
+	printVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
 
 	if *printVersion {
@@ -134,7 +142,7 @@ func main() {
 		return
 	}
 
-	found, expected, err := parser(os.Stdin, os.Stdout)
+	found, expected, err := parser(*verbose, os.Stdin, os.Stdout)
 	if err != nil {
 		log.Fatal(err)
 	}

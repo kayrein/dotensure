@@ -30,16 +30,16 @@ func TestParser_BasicCase(t *testing.T) {
 		{Action: Output, Output: "something else"},
 		{Action: Output, Output: "ExpectedQuery: b; bar"},
 		{Action: Output, Output: "ExpectedQuery: a"},
-		{Action: Output, Output: "ExpectedQuery: c"},
+		{Action: Output, Output: "ExpectedQuery: c\\n"},
 		{Action: Output, Output: "ExpectedQuery: d; bar"},
 		{Action: Fail, Output: "test failed"},
 		{Action: Output, Output: "ExecutedQuery: a"},
-		{Action: Output, Output: "ExecutedQuery: a; bar"},
+		{Action: Output, Output: "ExecutedQuery: a; bar\\n"},
 	}
 	text, err := jsonToStream(input)
 	require.NoError(t, err)
 	var buffer bytes.Buffer
-	found, expected, err := parser(text, &buffer)
+	found, expected, err := parser(false, text, &buffer)
 	require.NoError(t, err)
 	assert.Equal(t, 1, found)
 	assert.Equal(t, 4, expected)

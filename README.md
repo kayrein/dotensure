@@ -41,4 +41,6 @@ Tags are also syntactically accepted for ExecutedQueries but currently do not do
 
 ## Arguments
 
-Pass `-v` to dotensure to print the version.
+Pass `-verbose` to dotensure to print information about which test executed each test query.
+
+Pass `-version` to dotensure to print the version.
